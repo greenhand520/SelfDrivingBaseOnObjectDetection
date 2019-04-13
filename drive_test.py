@@ -8,11 +8,12 @@ import numpy as np
 from keras.models import load_model
 import tensorflow as tf
 from utils import Constant
-global correct_pre
 
+global left_time
+left_time = 0
 
 def get_max_prob_num(predictions_array):
-    """to get the integer of predition, instead of digit number"""
+    """to get the integer of perdition, instead of digit number"""
 
     prediction_edit = np.zeros([1, 5])
     for i in range(0, 5):
@@ -30,7 +31,6 @@ def control_car_simulation(action_num):
         print("Right")
         # time.sleep(0.25)
     elif action_num == 2:
-
         print('Forward')
     elif action_num == 3:
         print('Backward')
@@ -38,8 +38,8 @@ def control_car_simulation(action_num):
         print('Stop')
 
 
-class ImageProcessor():
-    def __init__(self,img, img_dir):
+class ImageProcessor(object):
+    def __init__(self, img, img_dir):
         super(ImageProcessor, self).__init__()
         self.img = img
         # self.event = threading.Event()
@@ -49,7 +49,7 @@ class ImageProcessor():
         # self.start()
 
     def run(self):
-        global latest_time, model, graph
+        global latest_time, model, graph, left_time
         image = Image.open(self.img)
         image_np = np.array(image)
         camera_data_array = np.expand_dims(image_np, axis=0)
@@ -64,35 +64,43 @@ class ImageProcessor():
                 predictions_array = model.predict(camera_data_array, batch_size=20, verbose=1)
             print(predictions_array)
             action_num = get_max_prob_num(predictions_array)
+            if action_num == 0:
+                left_time += 1
             control_car_simulation(action_num)
-            print("img_dir: ", self.img_dir, " ", "pre_dir: ", action_num)
-            if action_num == int(self.img_dir):
+            print("img_dir: %s pre_dir: %d" % (self.img_dir, action_num), end=" ")
+            if action_num == eval(self.img_dir):
+                print("True")
                 return True
             else:
+                print("False")
                 return False
 
 
 def main():
     """get data, then predict the data, edited data, then control the car"""
-    global model, graph
-
-    model_loaded = glob.glob(Constant.MODEL_PATH + '*.h5')
+    global model, graph, left_time
+    model_path = "model/2019-04-13_21-16/"
+    model_loaded = glob.glob(model_path + '*.h5')
     for single_mod in model_loaded:
         model = load_model(single_mod)
     graph = tf.get_default_graph()
-
-    imgs = glob.glob(Constant.BGR_IMG_PATH + "*")
-    count = 5683
-    print(len(imgs))
+    imgs = glob.glob(Constant.BGR_IMG_PATH + "*.jpg")
+    count = 500
+    # print(len(imgs))
     correct_pre = 0
-    while count > 0:
-        count = count - 1
+    i = count
+    while i > 0:
+        i -= 1
         img = imgs[random.randint(0, len(imgs) - 1)]
-        img_dir = img[9]
+        # print(img)
+        # the num "23" depend on the img path on your pc
+        img_dir = img[23]
         if ImageProcessor(img, img_dir).run():
             correct_pre += 1
+        print("finished %.3f%%" % (((count - i) / count) * 100))
     print("correct prediction times is %d" % correct_pre)
-    print("accuracy is %.3f" % (correct_pre / 5683))
+    print("accuracy is %.3f%%" % ((correct_pre / count) * 100))
+    print("left_time:", left_time)
 
 
 if __name__ == '__main__':

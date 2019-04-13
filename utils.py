@@ -17,10 +17,10 @@ class Constant(object):
     IMG_WIDTH = 160
     IMG_HEIGHT = 120
     IMG_CHANNELS = 3
-    BGR_IMG_PATH = "bgr_data/"
+    BGR_IMG_PATH = "G:/self_drive/bgr_data/"
     EDGE_IMG_PATH = "edge_img/"
     GRAY_IMG_PATH = "gray_img/"
-    NPZ_PATH = "old_npz/"
+    NPZ_PATH = "G:/self_drive/training_data_npz/"
     MODEL_PATH = "model/"
     TRAIN_LOG_PATH = "logs/"
 
@@ -78,4 +78,5 @@ def convert_to_edge_img(rgb_img_path):
 
 
 if __name__ == '__main__':
-    convert_to_edge_img(Constant.BGR_IMG_PATH)
+    pass
+    # convert_to_edge_img(Constant.BGR_IMG_PATH)
