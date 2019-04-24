@@ -20,7 +20,7 @@ from keras.utils import plot_model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.optimizers import Adam, SGD
 import matplotlib.pyplot as plt
-from utils import Constant
+from util import Constant
 
 np.random.seed(0)
 
@@ -56,7 +56,7 @@ def load_data(npz_path, trained_num=0, random_get=True):
     numbers = []  # to save the number of npz loaded in training_data
     if random_get:
         while len(numbers) < trained_num:
-            number = random.randint(0, trained_num)
+            number = random.randint(0, trained_num - 1)
             if number not in numbers:
                 numbers.append(number)
     else:
@@ -204,37 +204,19 @@ def build_model(keep_prob):
     """
     print("开始编译模型")
     model = Sequential()
-    # model.add(Lambda(lambda x: (x / 102.83 - 1), input_shape=(Constant.IMG_HEIGHT, Constant.IMG_WIDTH, Constant.IMG_CHANNELS)))
-    # model.add(Conv2D(filters=36, kernel_size=(5, 5), activation='elu', strides=(2, 2),
-    #                  input_shape=(Constant.IMG_HEIGHT, Constant.IMG_WIDTH, Constant.IMG_CHANNELS))) # out_shape: (58, 78, 24)
-    # # model.add(MaxPooling2D(pool_size=(2, 2), padding='same')) # out_shape: (29, 37, 24)
-    # model.add(Conv2D(filters=48, kernel_size=(5, 5), activation='elu', strides=(2, 2)))
-    # # model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    # model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='elu', strides=(2, 2)))
-    # model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    # model.add(Conv2D(filters=96, kernel_size=(3, 3), activation='elu'))
-    # model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    # model.add(Conv2D(filters=120, kernel_size=(3, 3), activation='elu'))
-    # model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
-    # model.add(Dropout(keep_prob))  # Dropout将在训练过程中每次更新参数时随机断开一定百分比（p）的输入神经元连接
-    # model.add(Flatten())
-    # model.add(Dense(500, activation='elu'))
-    # model.add(Dense(125, activation='elu'))
-    # model.add(Dense(50, activation='elu'))
-    # model.add(Dense(5))
     model.add(
-        Lambda(lambda x: (x / 102.83), input_shape=(Constant.IMG_HEIGHT, Constant.IMG_WIDTH, Constant.IMG_CHANNELS)))
-    model.add(Conv2D(filters=32, kernel_size=(5, 5), activation='elu', strides=(2, 2),
+        Lambda(lambda x: (x / 127.5 - 1.0), input_shape=(Constant.IMG_HEIGHT, Constant.IMG_WIDTH, Constant.IMG_CHANNELS)))
+    model.add(Conv2D(filters=24, kernel_size=(5, 5), activation='elu', strides=(2, 2),
                      input_shape=(Constant.IMG_HEIGHT, Constant.IMG_WIDTH, Constant.IMG_CHANNELS)))
-    model.add(Conv2D(filters=40, kernel_size=(5, 5), activation='elu', strides=(2, 2)))
+    model.add(Conv2D(filters=36, kernel_size=(5, 5), activation='elu', strides=(2, 2)))
     model.add(Conv2D(filters=48, kernel_size=(5, 5), activation='elu', strides=(2, 2)))
-    model.add(Conv2D(56, (3, 3), activation='elu'))
-    # model.add(Conv2D(64, (3, 3), activation='elu'))
+    model.add(Conv2D(64, (3, 3), activation='elu'))
+    model.add(Conv2D(64, (3, 3), activation='elu'))
     model.add(Dropout(keep_prob))  # Dropout将在训练过程中每次更新参数时随机断开一定百分比（p）的输入神经元连接
     model.add(Flatten())
-    # model.add(Dense(500, activation='elu'))
-    model.add(Dense(250, activation='elu'))
+    model.add(Dense(100, activation='elu'))
     model.add(Dense(50, activation='elu'))
+    model.add(Dense(10, activation='elu'))
     model.add(Dense(5))
     model.summary()
 
@@ -324,9 +306,9 @@ def main():
 
     keep_prob = 0.5
     learning_rate = 0.0001
-    nb_epoch = 30
-    samples_per_epoch = 300
-    batch_size = 50
+    nb_epoch = 20
+    samples_per_epoch = 3000
+    batch_size = 90
     # steps_per_epoch=samples_per_epoch / batch_size
 
     print('keep_prob = ', keep_prob)

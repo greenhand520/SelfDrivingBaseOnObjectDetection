@@ -7,10 +7,10 @@ import numpy as np
 # import car_control
 from keras.models import load_model
 import tensorflow as tf
-from utils import Constant
+from util import Constant
 
-global left_time
-left_time = 0
+global left_time, back_time
+left_time, back_time = 0, 0
 
 def get_max_prob_num(predictions_array):
     """to get the integer of perdition, instead of digit number"""
@@ -49,7 +49,7 @@ class ImageProcessor(object):
         # self.start()
 
     def run(self):
-        global latest_time, model, graph, left_time
+        global latest_time, model, graph, left_time, back_time
         image = Image.open(self.img)
         image_np = np.array(image)
         camera_data_array = np.expand_dims(image_np, axis=0)
@@ -66,6 +66,8 @@ class ImageProcessor(object):
             action_num = get_max_prob_num(predictions_array)
             if action_num == 0:
                 left_time += 1
+            elif action_num == 4:
+                back_time += 1
             control_car_simulation(action_num)
             print("img_dir: %s pre_dir: %d" % (self.img_dir, action_num), end=" ")
             if action_num == eval(self.img_dir):
@@ -78,14 +80,14 @@ class ImageProcessor(object):
 
 def main():
     """get data, then predict the data, edited data, then control the car"""
-    global model, graph, left_time
-    model_path = "model/2019-04-13_21-16/"
+    global model, graph, left_time, back_time
+    model_path = "model/2019-04-14_00-51/"
     model_loaded = glob.glob(model_path + '*.h5')
     for single_mod in model_loaded:
         model = load_model(single_mod)
     graph = tf.get_default_graph()
     imgs = glob.glob(Constant.BGR_IMG_PATH + "*.jpg")
-    count = 500
+    count = 5000
     # print(len(imgs))
     correct_pre = 0
     i = count
@@ -94,13 +96,14 @@ def main():
         img = imgs[random.randint(0, len(imgs) - 1)]
         # print(img)
         # the num "23" depend on the img path on your pc
-        img_dir = img[23]
+        img_dir = img[60]
         if ImageProcessor(img, img_dir).run():
             correct_pre += 1
-        print("finished %.3f%%" % (((count - i) / count) * 100))
+        print("finished %.2f%%" % (((count - i) / count) * 100))
     print("correct prediction times is %d" % correct_pre)
-    print("accuracy is %.3f%%" % ((correct_pre / count) * 100))
+    print("accuracy is %.2f%%" % ((correct_pre / count) * 100))
     print("left_time:", left_time)
+    print("back_time:", back_time)
 
 
 if __name__ == '__main__':

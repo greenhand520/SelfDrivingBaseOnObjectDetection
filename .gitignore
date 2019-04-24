@@ -1,0 +1,11 @@
+# Created by .ignore support plugin (hsz.mobi)
+/bgr_data
+/label_csv
+/label_img
+/label_xml
+/logs
+/.idea
+/model
+/tfrecord
+/inference_graph
+test.py

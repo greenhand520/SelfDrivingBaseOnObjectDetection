@@ -12,7 +12,7 @@ from pygame.locals import *
 import datetime
 import os
 import sys
-from utils import Server, Constant
+from util import Server, Constant
 
 
 class VideoStreaming(object):
@@ -27,37 +27,39 @@ class VideoStreaming(object):
         # firstly, create the img folder
         if not os.path.exists(Constant.BGR_IMG_PATH):
             os.mkdir(Constant.BGR_IMG_PATH)
-        if not os.path.exists(Constant.GRAY_IMG_PATH):
-            os.mkdir(Constant.GRAY_IMG_PATH)
-        if not os.path.exists(Constant.EDGE_IMG_PATH):
-            os.mkdir(Constant.EDGE_IMG_PATH)
-        path = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + "/"
-        os.mkdir(path)
+        path = Constant.BGR_IMG_PATH + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + "/"
+        os.makedirs(path)
         try:
             print("Getting stream from pi...")
             print("Press 'q' to exit")
             # need bytes here
-            stream_bytes = b' '
+            stream_bytes = b''
             key_pressed = False
-            dir = 4
+            dire = server.DIRE_STOP
+            cmd = b'4/90/'
             frame_num = 0
             start = time.time()
             while self.is_received:
                 stream_bytes += server.connection.read(1024)
                 first = stream_bytes.find(b'\xff\xd8')
                 last = stream_bytes.find(b'\xff\xd9')
+                # print(first, " ", last)
                 if first != -1 and last != -1:
                     jpg = stream_bytes[first:last + 2]
                     stream_bytes = stream_bytes[last + 2:]
                     image = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                    # print(image.shape)  #(width, height, 3)
                     cv2.imshow('image', image)
-                    # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                    # img_gb = cv2.GaussianBlur(gray, (3, 3), 0)
-                    # edge = cv2.Canny(img_gb, 50, 50)
-                    # cv2.imshow("edge", edge)
-                    # default direction is 4 (Stop) in every cycle
-                    # dir = 4
+                    # return0, return1 = server.receive_info(stream_bytes)
+                    # if str(type(return1)) == "<class 'str'>":  # return is not image
+                    #     rec = return1
+                    #     if rec == "break":
+                    #         server.close_server()
+                    #         print("Client break ")
+                    #         sys.exit(0)
+                    # elif str(type(return1)) == "<class 'numpy.ndarray'>":   # return is image
+                    #     image = return1
+                    #     cv2.imshow('image', image)
+                    # stream_bytes = return0
                     for event in pygame.event.get():
                         # 判断事件是不是按键按下的事件
                         if event.type == pygame.KEYDOWN:
@@ -66,22 +68,25 @@ class VideoStreaming(object):
                             if key_input[pygame.K_w] and not key_input[pygame.K_LEFT] and not key_input[pygame.K_RIGHT]:
                                 # print("Forward")
                                 key_pressed = True
-                                dir = 2
+                                dire = server.DIRE_FORWARD
+                                cmd = b'2/90/'  # dire/angle/other
                             # 按下左键，保存图片以0开头
                             elif key_input[pygame.K_LEFT]:
                                 # print("Left")
-                                dir = 0
+                                dire = server.DIRE_LEFT
+                                cmd = b'0/30/'
                             # 按下右键，保存图片以1开头
                             elif key_input[pygame.K_RIGHT]:
                                 # print("Right")
-                                dir = 1
+                                dire = server.DIRE_RIGHT
+                                cmd = b'1/30'
                             # 按下s后退键，保存图片为3开头
                             elif key_input[pygame.K_s]:
                                 # print("Backward")
-                                dir = 3
+                                dire = server.DIRE_BACK
+                                cmd = b'3/90'
                             elif key_input[pygame.K_q]:
-                                dir = 4
-                                server.send_info(b'4')
+                                cmd = b'4/90/q'
                                 self.is_received = False
                                 end = time.time()
                                 print("stop receiving stream...")
@@ -89,38 +94,42 @@ class VideoStreaming(object):
                                     frame_num, end - start, frame_num / (end - start)))
                                 time.sleep(0.1)
                                 break
-                            server.car_control(dir)
                         # 检测按键是不是抬起
                         elif event.type == pygame.KEYUP:
                             key_input = pygame.key.get_pressed()
                             # w键抬起，轮子回正
                             if key_input[pygame.K_w] and not key_input[pygame.K_LEFT] and not key_input[pygame.K_RIGHT]:
                                 # print("Forward")
-                                dir = 2
+                                dire = server.DIRE_FORWARD
+                                cmd = b'2/90/'
                             # s键抬起
                             elif key_input[pygame.K_s] and not key_input[pygame.K_LEFT] and not key_input[
                                 pygame.K_RIGHT]:
                                 # print("Backward")
-                                dir = 3
+                                dire = server.DIRE_BACK
+                                cmd = b'3/90'
                             else:
-                                dir = 4
+                                cmd = b'4/90'
                                 # print("Stop")
-                            server.car_control(dir)
+                                dire = server.DIRE_STOP
+                        server.send_info(cmd)
                     if key_pressed:
-                        bgr_saved_name = path + str(dir) + "_image" + str(time.time()) + ".jpg"
+                        bgr_saved_name = path + str(dire) + "_image" + str(time.time()) + ".jpg"
                         cv2.imwrite(bgr_saved_name, image, [cv2.IMWRITE_JPEG_QUALITY, 90])
                         frame_num += 1
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         self.is_received = False
                         print("stop receiving stream...")
                         break
+        except Exception as e:
+            print(e)
         finally:
             server.close_server()
             sys.exit(0)
 
 
 if __name__ == '__main__':
-    server = Server(Constant.HOST, Constant.PORT)
+    server = Server()
     print("Host: ", server.host_name + ' ' + server.host_ip)
     print("Connection from: ", server.client_address)
     vs = VideoStreaming()

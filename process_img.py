@@ -6,7 +6,7 @@ import matplotlib.image as mpimg
 from time import time
 import math
 from PIL import Image
-from utils import Constant
+from util import Constant
 
 CHUNK_SIZE = 128    # 将图片压缩，每256个做一次处理
 

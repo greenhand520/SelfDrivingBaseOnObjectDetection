@@ -10,10 +10,9 @@ import threading
 import random
 from PIL import Image
 import numpy as np
-# import car_control
 from keras.models import load_model
 import tensorflow as tf
-from utils import *
+from util import *
 import pygame
 import datetime
 import os
@@ -94,7 +93,7 @@ def load_models(model_path):
 
 def main():
     load_models(Constant.MODEL_PATH)
-    server = Server(Constant.HOST, Constant.PORT)
+    server = Server()
     driver = Driver(server, model, graph)
     driver.get_video_stream()
 
