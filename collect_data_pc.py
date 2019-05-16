@@ -12,8 +12,15 @@ from pygame.locals import *
 import datetime
 import os
 import sys
-from util import Server, Constant
+from server import Server
+from util import Constant
 
+
+# the commond send to drive car like "drive_motor/steer/angle|other".
+# fot "drive_motor" can be 0, 1 or 2, respective means stop, forward and back.
+# for "steer" can be 0, 1 or 2, respectively means turn straight, turn left and turn right.
+# for "angle" can be 0 to 30, means the angle car will turn, if the angle is more 30, the angle will be 30 default.
+# for "other" can be 'q', 's' or '', means quit sending and start send and no operate.
 
 class VideoStreaming(object):
     def __init__(self):
@@ -36,7 +43,7 @@ class VideoStreaming(object):
             stream_bytes = b''
             key_pressed = False
             dire = server.DIRE_STOP
-            cmd = b'4/90/'
+            cmd = '0/0/0|s'
             frame_num = 0
             start = time.time()
             while self.is_received:
@@ -48,6 +55,7 @@ class VideoStreaming(object):
                     jpg = stream_bytes[first:last + 2]
                     stream_bytes = stream_bytes[last + 2:]
                     image = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                    # cv2.line(image, (200, 0), (200, 300), (0, 0, 255), 1)
                     cv2.imshow('image', image)
                     # return0, return1 = server.receive_info(stream_bytes)
                     # if str(type(return1)) == "<class 'str'>":  # return is not image
@@ -63,30 +71,31 @@ class VideoStreaming(object):
                     for event in pygame.event.get():
                         # 判断事件是不是按键按下的事件
                         if event.type == pygame.KEYDOWN:
-                            key_input = pygame.key.get_pressed()  # 可以同时检测多个按键
+                            key_input = pygame.key.get_pressed()  # 可以同时检测多个wwwwww按键
                             # 按下前进，保存图片以2开头
                             if key_input[pygame.K_w] and not key_input[pygame.K_LEFT] and not key_input[pygame.K_RIGHT]:
                                 # print("Forward")
                                 key_pressed = True
                                 dire = server.DIRE_FORWARD
-                                cmd = b'2/90/'  # dire/angle/other
+                                cmd = '1/0/0|'
                             # 按下左键，保存图片以0开头
                             elif key_input[pygame.K_LEFT]:
                                 # print("Left")
                                 dire = server.DIRE_LEFT
-                                cmd = b'0/30/'
+                                cmd = '1/1/30|'
                             # 按下右键，保存图片以1开头
                             elif key_input[pygame.K_RIGHT]:
                                 # print("Right")
                                 dire = server.DIRE_RIGHT
-                                cmd = b'1/30'
+                                cmd = '1/2/30|'
                             # 按下s后退键，保存图片为3开头
                             elif key_input[pygame.K_s]:
                                 # print("Backward")
                                 dire = server.DIRE_BACK
-                                cmd = b'3/90'
+                                cmd = '2/0/0|'
                             elif key_input[pygame.K_q]:
-                                cmd = b'4/90/q'
+                                cmd = '0/0/0|q'
+                                server.send_msg(cmd)
                                 self.is_received = False
                                 end = time.time()
                                 print("stop receiving stream...")
@@ -101,18 +110,17 @@ class VideoStreaming(object):
                             if key_input[pygame.K_w] and not key_input[pygame.K_LEFT] and not key_input[pygame.K_RIGHT]:
                                 # print("Forward")
                                 dire = server.DIRE_FORWARD
-                                cmd = b'2/90/'
+                                cmd = '1/0/0|'
                             # s键抬起
-                            elif key_input[pygame.K_s] and not key_input[pygame.K_LEFT] and not key_input[
-                                pygame.K_RIGHT]:
+                            elif key_input[pygame.K_s] and not key_input[pygame.K_LEFT] and not key_input[pygame.K_RIGHT]:
                                 # print("Backward")
                                 dire = server.DIRE_BACK
-                                cmd = b'3/90'
+                                cmd = '2/0/0|'
                             else:
-                                cmd = b'4/90'
                                 # print("Stop")
+                                cmd = '0/0/0|'
                                 dire = server.DIRE_STOP
-                        server.send_info(cmd)
+                    server.send_msg(cmd)
                     if key_pressed:
                         bgr_saved_name = path + str(dire) + "_image" + str(time.time()) + ".jpg"
                         cv2.imwrite(bgr_saved_name, image, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -129,8 +137,8 @@ class VideoStreaming(object):
 
 
 if __name__ == '__main__':
-    server = Server()
-    print("Host: ", server.host_name + ' ' + server.host_ip)
-    print("Connection from: ", server.client_address)
+    s = Server()
+    print("Host: ", s.host_name + ' ' + s.host_ip)
+    print("Connection from: ", s.client_address)
     vs = VideoStreaming()
-    vs.collect(server)
+    vs.collect(s)

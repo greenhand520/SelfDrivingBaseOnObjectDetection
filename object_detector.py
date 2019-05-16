@@ -11,12 +11,12 @@ import sys
 import glob
 import math
 import time
-import drive_by_detector as driver
 from util import *
 
-MODEL_PATH = "E:/CommonFiles/git/models/research/object_detection/inference_graph/"
-TRAINING_PATH = "E:/CommonFiles/git/models/research/object_detection/training/"
-# TRAINING_PATH = "H:\\training"
+MODEL_PATH = "D:\object detector\ob20190515\model\inference_graph\\"
+# MODEL_PATH = "E:\CommonFiles\git\models\\research\object_detection\inference_graph_ssdlite\\"
+TRAINING_PATH = "D:\object detector\ob20190515\model\\training\\"
+# TRAINING_PATH = "E:\CommonFiles\git\models\\research\object_detection\\training_ssdlite"
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
 from object_detection.utils import label_map_util
@@ -30,10 +30,12 @@ PATH_TO_CKPT = os.path.join(MODEL_PATH, 'frozen_inference_graph.pb')
 PATH_TO_LABELS = os.path.join(TRAINING_PATH, 'pet_label_map.pbtxt')
 
 # Number of classes the object detector can identify
-NUM_CLASSES = 5
+NUM_CLASSES = 7
 
 # Y-axis unit vector
 VECTOR_Y = (0, 1)
+
+SIGN_L, SIGN_R, SIGN_F, SIGN_S, PATH_L, PATH_R, SIGN_TL = 1, 2, 3, 4, 5, 6, 7
 
 
 class Detector(object):
@@ -75,8 +77,8 @@ class Detector(object):
         (boxes, scores, classes, num) = self.sess.run(
             [self.detection_boxes, self.detection_scores, self.detection_classes, self.num_detections],
             feed_dict={self.image_tensor: image_expanded})
-
         # Draw the results of the detection
+        img_array2 = np.array(img_array)
         vis_util.visualize_boxes_and_labels_on_image_array(
             img_array,
             np.squeeze(boxes),
@@ -84,17 +86,20 @@ class Detector(object):
             np.squeeze(scores),
             self.category_index,
             use_normalized_coordinates=True,
-            line_thickness=2,
-            min_score_thresh=0.80)
+            line_thickness=1,
+            min_score_thresh=0.5)
 
         s_boxes = boxes[scores > 0.5]
         s_classes = classes[scores > 0.5]
         s_scores = scores[scores > 0.5]
         objects = {}  # dict of labels, key is label object, value is its class_name
-        sign_s_num, sign_l_num, sign_r_num, sign_f_num, path_num = 0, 0, 0, 0, 0
+        sign_s_num, sign_l_num, sign_r_num, sign_f_num, path_l_num, path_r_num, sign_tl_num = 0, 0, 0, 0, 0, 0, 0
         for i in range(len(s_classes)):
-            info = ObjectInfo(i, s_classes[i], s_boxes[i][1] * Constant.IMG_WIDTH, s_boxes[i][3] * Constant.IMG_WIDTH,
-                              s_boxes[i][0] * Constant.IMG_HEIGHT, s_boxes[i][2] * Constant.IMG_HEIGHT, s_scores[i])
+            info = ObjectInfo(i,
+                              s_classes[i],
+                              (round(s_boxes[i][1] * Constant.IMG_WIDTH), round(s_boxes[i][0] * Constant.IMG_HEIGHT),
+                               round(s_boxes[i][3] * Constant.IMG_WIDTH), round(s_boxes[i][2] * Constant.IMG_HEIGHT)),
+                              s_scores[i])
             objects[info] = info.class_name
             if info.class_name == SIGN_F:
                 sign_f_num += 1
@@ -104,22 +109,34 @@ class Detector(object):
                 sign_l_num += 1
             elif info.class_name == SIGN_R:
                 sign_r_num += 1
-            elif info.class_name == PATH:
-                path_num += 1
+            elif info.class_name == PATH_L:
+                path_l_num += 1
+            elif info.class_name == PATH_R:
+                path_r_num += 1
+            elif info.class_name == SIGN_TL:
+                sign_tl_num += 1
         cv2.imshow('Object detector', img_array)
-        cv2.waitKey(1)
-        return objects, {SIGN_L: sign_l_num, SIGN_R: sign_r_num, SIGN_F: sign_f_num, SIGN_S: sign_s_num, PATH: path_num}
+        # cv2.waitKey(1)
+        return objects, {SIGN_L: sign_l_num, SIGN_R: sign_r_num, SIGN_F: sign_f_num, SIGN_S: sign_s_num,
+                         PATH_L: path_l_num, PATH_R: path_r_num, SIGN_TL: sign_tl_num}, img_array
 
 
 class ObjectInfo(object):
-    def __init__(self, id, class_name, x_min, x_max, y_min, y_max, score):
+    def __init__(self, id, class_name, rect, score):
         self.id = id
         self.class_name = int(class_name)
-        self.x_min = int(round(x_min))
-        self.x_max = int(round(x_max))
-        self.y_min = int(round(y_min))
-        self.y_max = int(round(y_max))
+        self.x_min = int(rect[0])
+        self.y_min = int(rect[1])
+        self.x_max = int(rect[2])
+        self.y_max = int(rect[3])
+        self.rect = rect
         self.score = score
+
+    def set_rect(self, rect):
+        self.x_min = int(rect[0])
+        self.y_min = int(rect[1])
+        self.x_max = int(rect[2])
+        self.y_max = int(rect[3])
 
     def get_top_left(self):
         return self.x_min, self.y_min
@@ -133,43 +150,50 @@ class ObjectInfo(object):
     def get_bottom_right(self):
         return self.x_max, self.y_max
 
+    def get_center(self):
+        return (self.x_max + self.x_min) / 2, (self.y_max + self.y_min) / 2
+
+    def pixels_center_to_img_bottom(self):
+        return Constant.IMG_HEIGHT - self.get_center()[1]
+
+    def pixels_center_to_img_center(self):
+        return Constant.IMG_WIDTH / 2 - self.get_center()[0]
+
+    def get_linear_equation(self):
+        x1, y1, x2, y2 = self.rect
+        a = 0
+        b = 0
+        if self.class_name == PATH_L:
+            a = (y2 - y1) / (x1 - x2)
+            b = y1 - a * x2
+        elif self.class_name == PATH_R:
+            a = (y2 - y1) / (x2 - x1)
+            b = y1 - a * x1
+        return a, b
+
+    def pixels_line_to_img_center(self):
+        a, b = self.get_linear_equation()
+        dis = Constant.IMG_WIDTH / 2 - (Constant.IMG_HEIGHT / 2 - b) / a
+        return dis
+
     def get_size(self):
         return (self.x_max - self.x_min) * (self.y_max - self.y_min)
 
     def get_vector(self):
         """
-        get the two vectors of two diagonals
+        get the two vectors of two diagonals, if the path is path_l, the shapes likes this /,
+        if the path is path_r, the shape likes this \
         :return:
         """
-        return (self.x_max - self.x_min, self.y_max - self.y_min), (self.x_min - self.x_max, self.y_max - self.y_min)
+        if self.class_name == PATH_L:
+            return self.x_min - self.x_max, self.y_max - self.y_min
+        elif self.class_name == PATH_R:
+            return self.x_max - self.x_min, self.y_max - self.y_min
 
     def get_vector_length(self):
         return math.sqrt(pow((self.x_max - self.x_min), 2) + pow((self.y_max - self.y_min), 2))
 
     def get_angle_with_y(self):
-        return np.dot(self.get_vector()[0], VECTOR_Y) / (self.get_vector_length() * 1), \
-               np.dot(self.get_vector()[1], VECTOR_Y) / (self.get_vector_length() * 1)
-
-
-if __name__ == '__main__':
-    images = []
-    d = Detector()
-    detector_driver = driver.Driver(d)
-    image_paths = glob.glob(Constant.BGR_IMG_PATH + "2019-*")
-    for image_path in image_paths:
-        images += glob.glob(image_path + "/*.jpg")
-    image_num = len(images)
-    print(image_num)
-    start = time.time()
-    SIGN_L, SIGN_R, SIGN_F, SIGN_S, PATH = 1.0, 2.0, 3.0, 4.0, 5.0
-    i = 0
-    for image in images:
-        i += 1
-        objects_info, sign_num = d.detect(cv2.imread(image))
-        # print(image)
-        # print(image.split('\\')[2][0])
-        detector_driver.drive(objects_info, sign_num, image.split('\\')[2])
-    end = time.time()
-    print(detector_driver.excellent_prediction / image_num)
-    cv2.destroyAllWindows()
-    print(end - start)
+        return round(
+            (np.arccos(np.dot(self.get_vector(), VECTOR_Y) / (self.get_vector_length() * 1)) * 180) / np.pi,
+            1)

@@ -8,4 +8,8 @@
 /model
 /tfrecord
 /inference_graph
+/inference_graph_ssdlite
 test.py
+server_conf.conf
+/__pycache__
+/upload_to_server
