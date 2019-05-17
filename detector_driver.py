@@ -21,15 +21,15 @@ import socket
 import threadpool
 import queue
 
+
 SIGN_L, SIGN_R, SIGN_F, SIGN_S, PATH_L, PATH_R, SIGN_TL = 1, 2, 3, 4, 5, 6, 7
 CENTER_LR = Constant.IMG_WIDTH // 2
 CENTER_TB = Constant.IMG_HEIGHT // 2
 
 MAX_IOU = 0.8
-# Left half rectangle
-RECTANGLE_L = (0, 0, CENTER_LR, Constant.IMG_HEIGHT)
-# Right half rectangle
-RECTANGLE_R = (CENTER_LR, 0, Constant.IMG_WIDTH, Constant.IMG_HEIGHT)
+LR_RECTANGLE_BORDER = CENTER_LR
+RECTANGLE_L = (0, 0, LR_RECTANGLE_BORDER, Constant.IMG_HEIGHT)
+RECTANGLE_R = (LR_RECTANGLE_BORDER, 0, Constant.IMG_WIDTH - LR_RECTANGLE_BORDER, Constant.IMG_HEIGHT)
 # the okay pixel between image top and bottom center and sign of stop's y_min
 PIXEL_BETWEEN_CENTER_TB_SIGN_S_TOP = 10
 # the max dis between image left and right center and path's side
@@ -42,20 +42,82 @@ MIN_PIXEL_BETWEEN_CENTER_TB_SIGN_TL_BOTTOM = -30
 # MAX_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE = 25
 BEST_ANGLE_PATH_WITH_IMAGE_CENTER = 30
 
-# detect two path
-MIN_PATH_ANGLE_Y = 20
-MAX_PATH_ANGLE_Y = 42
-MIN_PATH_LR_ANGLE_SUB = 15
-MAX_PATH_LR_ANGLE_SUB = 25
-
-# detect single path
 MIN_ANGLE_Y = 40
 MIN_PIXEL_B = 55
 MIN_ANGLE_TURN = 0
 
 MAX_ANGLE_Y = 80
-MAX_PIXEL_B = 260
+MAX_PIXEL_B = 230
 MAX_ANGLE_TURN = 30
+
+
+class Path(ObjectInfo):
+
+    def __init__(self, rect, class_name):
+        self.PATH_L = 5
+        self.PATH_R = 6
+        self.class_name = class_name
+        self.path_rect = rect
+
+        # self.image_array = image_array
+
+    def get_linear_equation(self):
+        x1, y1, x2, y2 = self.path_rect
+        a = 0
+        b = 0
+        if self.class_name == self.PATH_L:
+            a = (y2 - y1) / (x1 - x2)
+            b = y1 - a * x2
+        elif self.class_name == self.PATH_R:
+            a = (y2 - y1) / (x2 - x1)
+            b = y1 - a * x1
+        return a, b
+
+    def cal_pixel(self):
+        """
+        calculate the pixel from the liner of CENTER_LR to the point that value of Y coordinate is CENTER_TB on the linear equation
+        corresponding to the path.
+        the pixel can be + or -.
+        """
+        a, b = self.get_linear_equation()
+        dis = CENTER_LR - (CENTER_TB - b) / a
+        return dis
+
+    def pixel_center_to_img_bottom(self):
+        return Constant.IMG_HEIGHT - self.get_center()[1]
+
+    def get_point_with_XY(self):
+        a, b = self.get_linear_equation()
+        return (0, b), (-b / a, 0)
+
+    def cal_rectangles_iou(self, rectangle):
+        """
+        两个检测框框是否有交叉，如果有交集则返回重叠度（交叉面积 / 路径矩形框的面积） 如果没有交集则返回 0
+        IOU here is different from the IOU on the internet.
+        It has my definition, to determine the position of the main part of the rectangle on the image.
+        说明：每个矩形，从左往右是 x 轴（0~无穷大），从上往下是 y 轴（0~无穷大），从左往右是宽度 w ，从上往下是高度 h
+        :param rectangle the first rectangle
+        :return: 两个如果有交集则返回重叠度 IOU, 如果没有交集则返回 0
+        """
+        x1, y1, w1, h1 = rectangle[0], rectangle[1], rectangle[2] - rectangle[0], rectangle[3] - rectangle[1]
+        x2, y2, w2, h2 = self.x_min, self.y_min, self.x_max - self.x_min, self.y_max - self.y_min
+        if x1 > x2 + w2:
+            return 0
+        if y1 > y2 + h2:
+            return 0
+        if x1 + w1 < x2:
+            return 0
+        if y1 + h1 < y2:
+            return 0
+        col_int = abs(min(x1 + w1, x2 + w2) - max(x1, x2))
+        row_int = abs(min(y1 + h1, y2 + h2) - max(y1, y2))
+        overlap_area = col_int * row_int
+        area1 = w1 * h1
+        area2 = w2 * h2
+        if area2 > area1:
+            area1, area2 = area2, area1
+        # return overlap_area / (area1 + area2 - overlap_area)
+        return overlap_area / area2
 
 
 class Driver(object):
@@ -78,21 +140,13 @@ class Driver(object):
         self.sign_s_detected_num = 0
         self.detected_img_num = 0
 
-    def handel_cmd(self):
-        return self.last_cmd.split('/')
-
     def drive(self, image_path=""):
-        # reset
-        self.path_l_obj = None
-        self.path_r_obj = None
-
         print("current img number: ", self.detected_img_num)
-        self.detected_img_num += 1
-        # print("is_detect_sigh_lr: ", self.is_detect_sigh_lr)
+        print("is_detect_sigh_lr: ", self.is_detect_sigh_lr)
         is_stop = False
         sign_l_num = self.objects_num[SIGN_L]
         sign_r_num = self.objects_num[SIGN_R]
-        # sign_f_num = self.objects_num[SIGN_R]
+        sign_f_num = self.objects_num[SIGN_R]
         sign_s_num = self.objects_num[SIGN_S]
         path_l_num = self.objects_num[PATH_L]
         path_r_num = self.objects_num[PATH_R]
@@ -122,20 +176,17 @@ class Driver(object):
             if sign_l_num != 0:
                 print("sign_l num: %d" % sign_l_num)
                 sign_l = [k for k, v in self.objects_info.items() if v == SIGN_L][0]
-                if sign_l.y_max - CENTER_TB >= PIXEL_BETWEEN_CENTER_TB_SIGN_LR_TOP:
-                    self.is_detect_sigh_lr = True
+                # if sign_l.y_max - CENTER_TB >= PIXEL_BETWEEN_CENTER_TB_SIGN_LR_TOP:
+                self.is_detect_sigh_lr = True
             elif sign_r_num != 0:
                 print("sign_r num: %d" % sign_r_num)
                 sign_r = [k for k, v in self.objects_info.items() if v == SIGN_R][0]
-                if sign_r.y_max - CENTER_TB >= PIXEL_BETWEEN_CENTER_TB_SIGN_LR_TOP:
-                    self.is_detect_sigh_lr = True
-            if path_num == 0:
-                if self.handel_cmd()[1] == '1' or '2':
-                    cmd = "2/0/0|"
-            else:
-                cmd = self.handle_path()
-        if self.handel_cmd()[0] != '2':
-            self.last_cmd = cmd
+                # if sign_r.y_max - CENTER_TB >= PIXEL_BETWEEN_CENTER_TB_SIGN_LR_TOP:
+                self.is_detect_sigh_lr = True
+            # elif path_r_num + path_l_num != 0:
+            #     self.is_detect_sigh_lr = False
+            cmd = self.handle_path()
+            self.detected_img_num += 1
         return cmd
 
     def detect_sign_tl(self):
@@ -147,6 +198,7 @@ class Driver(object):
             return 0
         else:
             return 1
+        # return 1
 
     def handle_path(self):
         """
@@ -156,25 +208,23 @@ class Driver(object):
         # get all the path obj
         self.path_l_obj = [k for k, v in self.objects_info.items() if v == PATH_L]
         self.path_r_obj = [k for k, v in self.objects_info.items() if v == PATH_R]
-
-        # correct some path obj detected wrong by IOU I define.
+        # correct some path obj detected wrong.
         if not self.is_detect_sigh_lr:
             wrong_path_l, wrong_path_r = 0, 0
             for path_l in self.path_l_obj:
-                if path_l.cal_rectangles_iou(
-                        RECTANGLE_R) >= MAX_IOU:  # it is path_r, remove it from path_l list, add to path_r list
+                if path_l.x_max > CENTER_LR:  # it is path_r, remove it from path_l list, add to path_r list
                     wrong_path_l += 1
-                    self.path_r_obj.append(path_l)
+                    # self.path_r_obj.append(path_l)
                     self.path_l_obj.remove(path_l)
             for path_r in self.path_r_obj:
-                if path_r.cal_rectangles_iou(RECTANGLE_L) >= MAX_IOU:
+                if path_r.x_min < CENTER_LR:
                     wrong_path_r += 1
-                    self.path_l_obj.append(path_r)
+                    # self.path_l_obj.append(path_r)
                     self.path_r_obj.remove(path_r)
             print("wrong path_l: %d, wrong path_r: %d" % (wrong_path_l, wrong_path_r))
-
         path_l_num = len(self.path_l_obj)
         path_r_num = len(self.path_r_obj)
+
         cmd = "1/0/0|"
         if len(self.path_l_obj) == 0 and len(self.path_r_obj) != 0:  # detected path_r
             cmd = self.detect_single_path(self.path_r_obj, path_r_num, PATH_R)
@@ -188,129 +238,127 @@ class Driver(object):
 
     def detect_single_path(self, path_obj, path_num, path_class):
         print(str(("", "", "", "", "", "path_l", "path_r")[path_class]) + " ==>", end=" ")
-        # pixels_center = 0
+        pixels_center = 0
         pixels_bottom = 0
         angle_y = 0
         for info in path_obj:
             print(info.rect)
-            # pixels_center += info.pixels_center_to_img_center()
-            # pixels_bottom += info.pixels_center_to_img_bottom()
-            pixels_bottom += info.pixels_liner_center_to_image_bottom()
+            pixels_center += info.pixels_center_to_img_center()
+            pixels_bottom += info.pixels_center_to_img_bottom()
             angle_y += info.get_angle_with_y()
-        # pixels_center = pixels_center / path_num
+        pixels_center = pixels_center / path_num
         pixels_bottom = pixels_bottom / path_num
-        print("pixels_bottom: ", pixels_bottom)
         angle_y = angle_y / path_num
-        print("angle with y: ", angle_y)
         # turn angle, depends on the path line angle with y and the pixel number of line center to img bottom
         # if pixels_bottom
         if angle_y >= MIN_ANGLE_Y:
-            angle_turn = str(self.cal_angel_turn_by_pixels_angle(pixels_bottom, angle_y))
+            angle_turn = self.cal_angle_turn2(pixels_bottom, angle_y)
             if path_class == PATH_L:
                 cmd = "1/2/" + angle_turn + "|"
             else:
                 cmd = "1/1/" + angle_turn + "|"
         # keep forward
-        else:
-            cmd = self.handel_single_path_with_small_angle_y(path_obj, path_class)
-        return cmd
-
-    def handel_single_path_with_small_angle_y(self, path_obj, path_class):
-        angle_y = 0
-        for info in path_obj:
-            angle_y += info.get_angle_with_y()
-        angle_y = angle_y / len(path_obj)
-        if path_class == PATH_L:
-            # print("path_l_angle_y: ", angle_y)
-            if angle_y <= MIN_PATH_ANGLE_Y:
-                print("current car is on the road left, turn right....")
-                cmd = "1/2/30|"
-            else:
-                # MIN_PATH_ANGLE_Y(20) < angle_y < MIN_ANGLE_Y(40)
-                angle_turn = str(self.cal_angle_turn_by_path_angle_y(MIN_ANGLE_Y, MIN_PATH_ANGLE_Y, angle_y))
+        elif MIN_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE <= pixels_center <= MAX_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE:
+            # angle_turn = 0
+            cmd = "1/1/0|"
+        elif pixels_center < MIN_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE:
+            angle_turn = self.cal_angle_turn1(MIN_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE, 0, abs(pixels_center))
+            if path_class == PATH_L:
                 cmd = "1/2/" + angle_turn + "|"
-        else:
-            # print("path_r_angle_y: ", angle_y)
-            if angle_y <= MIN_PATH_ANGLE_Y:
-                print("current car is on the road right, turn left....")
-                cmd = "1/1/30|"
             else:
-                # MIN_PATH_ANGLE_Y(20) < angle_y < MIN_ANGLE_Y(40)
-                angle_turn = str(self.cal_angle_turn_by_path_angle_y(MIN_ANGLE_Y, MIN_PATH_ANGLE_Y, angle_y))
                 cmd = "1/1/" + angle_turn + "|"
+        elif pixels_center > MAX_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE:
+            angle_turn = self.cal_angle_turn1(200, MAX_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE, abs(pixels_center))
+            if path_class == PATH_L:
+                cmd = "1/1/" + angle_turn + "|"
+            else:
+                cmd = "1/2/" + angle_turn + "|"
+        # else:
+        #     angle_turn = self.cal_angle_turn1(MAX_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE,
+        #                                       MIN_PIXEL_BETWEEN_CENTER_LR_PATH_INSIDE, abs(pixels_center))
+        print("pixels_center: %.2f, pixels_bottom: %.2f, angle with y: %.2f" % (pixels_center,
+                                                                                pixels_bottom, angle_y))
         return cmd
 
     def detect_all_path(self, path_l_num, path_r_num):
+        pixels_l, pixels_r = 0, 0
         cmd = "1/0/0|"
-        path_l_angle_y, path_r_angle_y = 0, 0
-        angle_turn = 0
         for info in self.path_l_obj:
-            path_l_angle_y += info.get_angle_with_y()
-        path_l_angle_y = path_l_angle_y / path_l_num
-        print("path_l_angle_y: ", path_l_angle_y)
+            pixels_l += info.pixels_center_to_img_center()
+        pixels_l = abs(pixels_l / path_l_num)
         for info in self.path_r_obj:
-            path_r_angle_y += info.get_angle_with_y()
-        path_r_angle_y = path_r_angle_y / path_r_num
-        print("path_r_angle_y: ", path_r_angle_y)
+            pixels_r += info.pixels_center_to_img_center()
+        pixels_r = abs(pixels_r / path_r_num)
+        center = (CENTER_LR + pixels_r - (CENTER_LR - pixels_l)) // 2
+        pixels = CENTER_LR - center
 
-        sub_angle = path_r_angle_y - path_l_angle_y
-        print("sub angle: ", sub_angle)
-        if path_l_angle_y <= MIN_PATH_ANGLE_Y or path_r_angle_y >= MAX_PATH_ANGLE_Y:
-            print("current car is on the road left, turn right....")
-            cmd = "1/2/30|"
-        elif path_r_angle_y <= MIN_PATH_ANGLE_Y or path_l_angle_y >= MAX_PATH_ANGLE_Y:
-            print("current car is on the road right, turn left....")
-            cmd = "1/1/30|"
-        else:
-            # only depend on the angle with y
-            angle_turn = str(
-                self.cal_angle_turn_by_path_angle_y(MAX_PATH_LR_ANGLE_SUB, MIN_PATH_LR_ANGLE_SUB, sub_angle))
-            if sub_angle > 0 and abs(sub_angle) >= MIN_PATH_LR_ANGLE_SUB:
-                print("current car is on the road left, turn right..")
-                cmd = "1/2/" + angle_turn + "|"
-            elif sub_angle < 0 and abs(sub_angle) >= MIN_PATH_LR_ANGLE_SUB:
-                print("current car is on the road right, turn left..")
-                cmd = "1/1/" + angle_turn + "|"
+        print("pixels from center: ", pixels)
+        angle_turn = self.cal_angle_turn1(50, 80, abs(pixels), max_angle_turn=20)
+        if pixels > 0:  # the car is on the left, turn right
+            cmd = "1/1/" + angle_turn + "|"
+        elif pixels < 0:
+            cmd = "1/2/" + angle_turn + "|"
+        cmd = "1/0/0|"
         return cmd
 
-    def cal_angle_turn_by_path_angle_y(self, max_angle, min_angle, angle_y):
+    def cal_angle_turn1(self, max_pixel, min_pixel, pixel_from_path=-1, max_angle_turn=30):
         """
-        cal the angle turn by the line angle with y
+        calculate the angle car will turn, when the path line angle with y < MIN_ANGLE_Y, angle_turn = a * pixels_from + b
+        :param max_pixel: the max pixel
+        :param min_pixel: the min pixel
+        :param pixel_from_path: the pixel between path  and center of car
+        :return:
         """
-        angle = 0
-        a = (MAX_ANGLE_TURN - 0) / (
-                max_angle - min_angle)
-        b = MAX_ANGLE_TURN - max_angle * a
-        angle = a * abs(angle_y) + b
-        return int(angle)
+        angle, angle1, angle2 = 0, 0, 0
+        if pixel_from_path != -1:
+            # point1 = (min_pixel, MAX_ANGLE_TURN)
+            a = (max_angle_turn - 0) / (
+                    min_pixel - max_pixel)
+            b = max_angle_turn - min_pixel * a
+            print("cal of path: ", a, b)
+            angle1 = a * pixel_from_path + b
+        return str(int(angle1))
+        # angle = angle1
+        # if pixel_from_sign != -1:
+        #     point2 = (MAX_PIXEL_BETWEEN_CENTER_TB_SIGN_LR_BOTTOM, MAX_ANGLE_TURN)
+        #     c = (MAX_ANGLE_TURN - 0) / (
+        #             MAX_PIXEL_BETWEEN_CENTER_TB_SIGN_LR_BOTTOM - MIN_PIXEL_BETWEEN_CENTER_TB_SIGN_LR_BOTTOM)
+        #     d = point2[1] - point2[0] * c
+        #     print("cal of sign: ", c, d)
+        #     angle2 = c * pixel_from_sign + d
+        #     angle = angle2
+        # if pixel_from_path != -1 and pixel_from_sign != -1:
+        #     return str(round((angle1 + angle2) / 2))
+        # else:
+        #     return str(round(angle))
 
-    def cal_angle_turn_by_pixels_to_bottom(self, max_pixels, min_pixels, pixels_to_b):
+    def cal_angle_turn2(self, pixels_to_b, angle_y):
         """
-        cal the angle turn by the line center pixels to image bottom
+         calculate the angle car will turn, when the path line angle with y >= MIN_ANGLE_Y
+        :param pixels_to_b:
+        :param angle_y:
+        :return:
         """
-        if pixels_to_b <= MIN_PIXEL_B:
-            angle_turn = MAX_ANGLE_TURN
-        else:
-            sum_angle_turn = MAX_ANGLE_TURN - MIN_ANGLE_TURN
-            a = sum_angle_turn / (min_pixels - max_pixels)
-            b = MAX_ANGLE_TURN - a * min_pixels
-            angle_turn = a * pixels_to_b + b
-        return int(angle_turn)
-
-    def cal_angel_turn_by_pixels_angle(self, pixels_to_b, angle_y, max_pixel=MAX_PIXEL_B, min_pixel=MIN_PIXEL_B,
-                                       max_angle=MAX_ANGLE_Y, min_angle=MIN_ANGLE_Y):
-        """
-         calculate the angle car will turn by the line angle with y and the line center pixels to image bottom
-        """
-        y1 = self.cal_angle_turn_by_pixels_to_bottom(max_pixel, min_pixel, pixels_to_b)
-        print("angle by pixels: ", y1)
-        y2 = self.cal_angle_turn_by_path_angle_y(max_angle, min_angle, angle_y)
-        print("angle by angle: ", y2)
+        # l = MAX_ANGLE_Y - MIN_ANGLE_Y
+        # m = MAX_PIXEL_B - MIN_PIXEL_B
+        # n = MAX_ANGLE_TURN - MIN_ANGLE_TURN
+        # point1 = (MAX_PIXEL_B, MIN_ANGLE_TURN)
+        # point2 = (MIN_PIXEL_B, MAX_ANGLE_TURN)
+        sum_angle_turn = MAX_ANGLE_TURN - MIN_ANGLE_TURN
+        a = sum_angle_turn / (MIN_PIXEL_B - MAX_PIXEL_B)
+        b = MAX_ANGLE_TURN - a * MIN_PIXEL_B
+        y1 = a * pixels_to_b + b
+        print(y1)
+        # point3 = (MAX_ANGLE_Y, MIN_ANGLE_TURN)
+        # point4 = (MIN_ANGLE_Y, MAX_ANGLE_TURN)
+        c = sum_angle_turn / (MIN_ANGLE_Y - MAX_ANGLE_Y)
+        d = MAX_ANGLE_TURN - c * MIN_ANGLE_Y
+        y2 = c * angle_y + d
+        print(y2)
         # angle_turn = (1 - pixels_to_b / (MAX_PIXEL_B - MIN_PIXEL_B)) * y1 + angle_y / (MAX_ANGLE_Y - MIN_ANGLE_Y) * y2
-        # cal the angle by weights
-        angle_turn = (max_pixel - pixels_to_b) / (max_pixel - min_pixel) * y1 + (angle_y - min_angle) / (
-                max_angle - min_angle) * y2
-        return int(angle_turn)
+        angle_turn = (MAX_PIXEL_B - pixels_to_b) / (MAX_PIXEL_B - MIN_PIXEL_B) * y1 + (angle_y - MIN_ANGLE_Y) / (
+                MAX_ANGLE_Y - MIN_ANGLE_Y) * y2
+        return str(int(angle_turn))
 
 
 class ObjInfoKey(object):
@@ -379,6 +427,7 @@ if __name__ == '__main__':
     objects_info_dict = {}
     pygame.init()
     window = pygame.display.set_mode((320, 100))
+    window.fill((246, 246, 246))
     try:
         start = time.time()
         while server.is_received:
@@ -408,10 +457,6 @@ if __name__ == '__main__':
             is_received = server.is_received
         end = time.time()
         print(end - start)
-    except Exception as e:
-        print(e)
-        server.send_msg('0/0/0|q')
-        server.is_received = False
     finally:
         local_path = object_dict_to_csv(objects_info_dict, folder_name)
         if is_upload:

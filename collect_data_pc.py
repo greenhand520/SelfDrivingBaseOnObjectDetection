@@ -55,7 +55,7 @@ class VideoStreaming(object):
                     jpg = stream_bytes[first:last + 2]
                     stream_bytes = stream_bytes[last + 2:]
                     image = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                    cv2.line(image, (200, 0), (200, 300), (0, 0, 255), 1)
+                    # cv2.line(image, (200, 0), (200, 300), (0, 0, 255), 1)
                     cv2.imshow('image', image)
                     # return0, return1 = server.receive_info(stream_bytes)
                     # if str(type(return1)) == "<class 'str'>":  # return is not image
@@ -122,8 +122,8 @@ class VideoStreaming(object):
                                 dire = server.DIRE_STOP
                     server.send_msg(cmd)
                     if key_pressed:
-                        # bgr_saved_name = path + str(dire) + "_image" + str(time.time()) + ".jpg"
-                        # cv2.imwrite(bgr_saved_name, image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                        bgr_saved_name = path + str(dire) + "_image" + str(time.time()) + ".jpg"
+                        cv2.imwrite(bgr_saved_name, image, [cv2.IMWRITE_JPEG_QUALITY, 90])
                         frame_num += 1
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         self.is_received = False
