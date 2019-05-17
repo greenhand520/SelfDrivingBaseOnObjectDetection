@@ -58,10 +58,11 @@ class Server(object):
                     #     self.image_list.append(image)
         except Exception as e:
             print(e)
+            self.send_msg('0/0/0|q')
+            self.is_received = False
         finally:
             self.close_server()
             cv2.destroyAllWindows()
-            self.is_received = False
 
     def receive_info(self, stream_bytes):
         # a useless function, only do not want remove it.
