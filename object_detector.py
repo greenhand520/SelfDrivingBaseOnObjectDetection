@@ -160,16 +160,24 @@ class ObjectInfo(object):
         return Constant.IMG_WIDTH / 2 - self.get_center()[0]
 
     def get_linear_equation(self):
-        x1, y1, x2, y2 = self.rect
+        x_min, y_min, x_max, y_max = self.rect
         a = 0
         b = 0
         if self.class_name == PATH_L:
-            a = (y2 - y1) / (x1 - x2)
-            b = y1 - a * x2
+            a = (y_max - y_min) / (x_min - x_max)
+            b = y_min - a * x_max
         elif self.class_name == PATH_R:
-            a = (y2 - y1) / (x2 - x1)
-            b = y1 - a * x1
+            a = (y_max - y_min) / (x_max - x_min)
+            b = y_min - a * x_min
         return a, b
+
+    def pixels_liner_center_to_image_bottom(self):
+        a, b = self.get_linear_equation()
+        return Constant.IMG_HEIGHT - Constant.IMG_WIDTH / 2 * a + b
+
+    def get_point_with_xy(self):
+        a, b = self.get_linear_equation()
+        return (0, b), (-b / a, 0)
 
     def pixels_line_to_img_center(self):
         a, b = self.get_linear_equation()
@@ -197,3 +205,32 @@ class ObjectInfo(object):
         return round(
             (np.arccos(np.dot(self.get_vector(), VECTOR_Y) / (self.get_vector_length() * 1)) * 180) / np.pi,
             1)
+
+    def cal_rectangles_iou(self, rectangle):
+        """
+        两个检测框框是否有交叉，如果有交集则返回重叠度（交叉面积 / 路径矩形框的面积） 如果没有交集则返回 0
+        IOU here is different from the IOU on the internet.
+        It's just my definition, to determine the position of the main part of the rectangle on the image.
+        说明：每个矩形，从左往右是 x 轴（0~无穷大），从上往下是 y 轴（0~无穷大），从左往右是宽度 w ，从上往下是高度 h
+        :param rectangle the first rectangle
+        :return: 两个如果有交集则返回重叠度 IOU, 如果没有交集则返回 0
+        """
+        x1, y1, w1, h1 = rectangle[0], rectangle[1], rectangle[2] - rectangle[0], rectangle[3] - rectangle[1]
+        x2, y2, w2, h2 = self.x_min, self.y_min, self.x_max - self.x_min, self.y_max - self.y_min
+        if x1 > x2 + w2:
+            return 0
+        if y1 > y2 + h2:
+            return 0
+        if x1 + w1 < x2:
+            return 0
+        if y1 + h1 < y2:
+            return 0
+        col_int = abs(min(x1 + w1, x2 + w2) - max(x1, x2))
+        row_int = abs(min(y1 + h1, y2 + h2) - max(y1, y2))
+        overlap_area = col_int * row_int
+        area1 = w1 * h1
+        area2 = w2 * h2
+        if area2 > area1:
+            area1, area2 = area2, area1
+        # return overlap_area / (area1 + area2 - overlap_area)
+        return overlap_area / area2
