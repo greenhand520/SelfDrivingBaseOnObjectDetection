@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @author: mdmbct
 # @date:   4/18/2019 6:59 PM
-# @last modified by: 
+# @last modified by:
 # @last modified time: 4/18/2019 6:59 PM
 from util import *
 from server import Server
@@ -74,6 +74,7 @@ class Driver(object):
         self.is_detect_sigh_lr = False
         self.path_l_obj = None
         self.path_r_obj = None
+        self.sign_s_obj = None
         # self.pixels_path_b = 0
         self.sign_s_detected_num = 0
         self.detected_img_num = 0
@@ -103,10 +104,10 @@ class Driver(object):
         if sign_s_num != 0:
             print("has sign_s")
             for o in [k for k, v in self.objects_info.items() if v == SIGN_S]:
-                if o.x_min > CENTER_TB:
-                    cmd = "0/0/0|"
-                    is_stop = True
-                    self.sign_s_detected_num += 1
+                if o.y_max - o.y_min > 120 and o.x_min > CENTER_TB:
+                        cmd = "0/0/0|"
+                        is_stop = True
+                        self.sign_s_detected_num += 1
                 break
         elif sign_tl_num != 0:  # detect traffic light
             sign_tl = [k for k, v in self.objects_info.items() if v == SIGN_TL][0]
@@ -357,7 +358,7 @@ if __name__ == '__main__':
     server = Server()
     client = Client()
     d.client = client
-    is_upload = False
+    is_upload = True
     image_stack = server.image_stack
     # pool = ThreadPool(4)
     # while server.is_received:

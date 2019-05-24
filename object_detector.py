@@ -87,11 +87,11 @@ class Detector(object):
             self.category_index,
             use_normalized_coordinates=True,
             line_thickness=1,
-            min_score_thresh=0.5)
+            min_score_thresh=0.3)
 
-        s_boxes = boxes[scores > 0.5]
-        s_classes = classes[scores > 0.5]
-        s_scores = scores[scores > 0.5]
+        s_boxes = boxes[scores > 0.3]
+        s_classes = classes[scores > 0.3]
+        s_scores = scores[scores > 0.3]
         objects = {}  # dict of labels, key is label object, value is its class_name
         sign_s_num, sign_l_num, sign_r_num, sign_f_num, path_l_num, path_r_num, sign_tl_num = 0, 0, 0, 0, 0, 0, 0
         for i in range(len(s_classes)):
@@ -118,7 +118,7 @@ class Detector(object):
         cv2.imshow('Object detector', img_array)
         # cv2.waitKey(1)
         return objects, {SIGN_L: sign_l_num, SIGN_R: sign_r_num, SIGN_F: sign_f_num, SIGN_S: sign_s_num,
-                         PATH_L: path_l_num, PATH_R: path_r_num, SIGN_TL: sign_tl_num}, img_array
+                         PATH_L: path_l_num, PATH_R: path_r_num, SIGN_TL: sign_tl_num}, img_array2
 
 
 class ObjectInfo(object):

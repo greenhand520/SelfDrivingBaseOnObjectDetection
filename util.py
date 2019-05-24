@@ -29,7 +29,7 @@ class Constant(object):
     LABEL_CSV_PATH = "label_csv/"
     TFRECORD_PATH = "tfrecord/"
     MODEL_PATH = "model/"
-    DATA_SET_PATH = "E:/upload_to_server/data_set/"
+    DATA_SET_PATH = "upload_to_server/data_set/"
     MODEL_UPLOADED_PATH = "upload_to_server/model/"
     SERVER_DATA_PATH = "/root/self_driving_data_set/static/source/data_set/"
 

@@ -32,7 +32,11 @@ class Server(object):
         self.DIRE_STOP = 4
 
     def send_msg(self, msg):
-        self.connector.send(msg.encode(encoding="utf-8"))
+        try:
+            self.connector.send(msg.encode(encoding="utf-8"))
+        except Exception as e:
+            print("server.py fun send_msg() line 38: ",e)
+            self.is_received = False
         # self.connection.write(info)
 
     def get_video_stream(self):
@@ -57,7 +61,7 @@ class Server(object):
                     # else:
                     #     self.image_list.append(image)
         except Exception as e:
-            print(e)
+            print("server.py line 60: ", e)
             self.send_msg('0/0/0|q')
             self.is_received = False
         finally:
