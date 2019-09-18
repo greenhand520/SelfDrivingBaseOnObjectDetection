@@ -26,51 +26,51 @@
 
 ### 目录结构
 
-self_driving_base_on_object_detection:
-│  .gitignore
-│  client.py	
-│  CNN_driver.py
-│  CNN_driver_test.py
-│  collect_data_pc.py
-│  csv_to_tfRecord.py
-│  detector_driver.py
-│  detector_driver_test.py
-│  environment_gpu.yml
-│  object_detector.py
-│  process_img.py
+```
+self_driving_base_on_object_detection:	项目根目录
+│  .gitignore	git忽略文件
+│  client.py	和服务器上控制信号灯状态的代码通信。	
+│  CNN_driver.py	利用CNN产生的模型控制小车。
+│  CNN_driver_test.py	利用CNN产生的模型，直接读取图片在控制台输出控制的结果。
+│  collect_data_pc.py	人工控制小车采集数据时，给小车发送控制指令、接受小车发来的图片并存储。
+│  csv_to_tfRecord.py	字面意思。
+│  detector_driver.py	依据目标检测的结果控制小车运动。
+│  detector_driver_test.py	依据目标检测的结果，读取图片，在控制台输出相应的信息。
+│  environment_gpu.yml	项目所需要的环境及包，不全。
+│  object_detector.py	加载模型，输出目标检测的结果。
+│  process_img.py	将采集到的图片转成npz文件
 │  README.md
-│  server.py
-│  server_conf.conf
-│  server_conf_2.conf
-│  train.py
-│  uploader.py
-│  util.py
+│  server.py	与pi通信，发送控制指令、接受pi发送的图片。
+│  server_conf.conf	  服务器的配置，uername、port、ip、password
+│  train.py    利用npz文件训练模型,我没有做将NPZ文件分批读取到内存的优化所以如果采集的图片特别多,训练时需要特别大内存的支持。
+│  uploader.py	与pi通信，发送控制指令、接受pi发送的图片。
+│  util.py	  项目用到的一些路径，还有一些杂七杂八的代码，反正是要用到的。
 │          
-├─bgr_data
+├─bgr_data	存储人工收集数据时采集到的RGB图片
 │  ├─2019-05-06_22-22-03
 │  │      0_image1557152598.117841.jpg
 │  │      0_image1557152598.412826.jpg
 │  │  
-├─code_run_on_pi
-│      car_control.py
-│      collect_data_pi.py
+├─code_run_on_pi	在树莓派上运行的代码
+│      car_control.py	控制小车运动
+│      collect_data_pi.py	通过摄像头采集图片并发送给PC
 │      
-├─logs
+├─logs 项目前期用的CNN来实现的，但是效果很不理想，CNN部分的代码依然保留。这个文件夹用来存放tensorboard产生的文件的
 │  └─tensorboard
 │          events.out.tfevents.1555171733.BETTERMELENOVO
 │          events.out.tfevents.1555172048.BETTERMELENOVO
 │          
-├─traffic_light_control
-│      traffic_light_controlor.py
+├─traffic_light_control	在服务器上运行的代码
+│      traffic_light_controlor.py	一个简易控制信号灯的代码，和PC通信，将信号灯的状态发送给PC
 │      
-├─upload_to_server
-│  └─data_set
-│      ├─set_BetterMeLenovo_20190509194323
-│      │  │  log.txt
-│      │  │  pet_label_map.pbtxt
-│      │  │  set_BetterMeLenovo_20190509194323.csv
+├─upload_to_server	一趟运行结束后要上传到服务器上文件的存放路径
+│  └─data_set	数据集存放位置
+│      ├─set_BetterMeLenovo_20190509194323	数据集/上传者/上传时间
+│      │  │  log.txt	在控制台的输出信息		
+│      │  │  pet_label_map.pbtxt	要检测目标的标签
+│      │  │  set_BetterMeLenovo_20190509194323.csv	此趟检测结果对应的csv文件,可以直接用这个文件和图片生成record文件
 │      │  │  
-│      │  └─images
+│      │  └─images	此趟运行采集到的图片
 │      │          image_0.jpg
 │      │          image_1.jpg
 │      │          image_2.jpg
@@ -83,11 +83,11 @@ self_driving_base_on_object_detection:
 │      │          image_9.jpg
 │      │          image_99.jpg
 │      │          
-│      └─zip
+│      └─zip	要上传到服务器的数据集的压缩包
 │              set_BetterMeLenovo_20190516201657.zip
 │              set_mdmbct_20190518130102.zip
 │              
-├─web
+├─web	下载数据集网站的代码,只有一个简单的展示、下载数据的页面,用的django写的.不得不睡django真的比javaweb简单太多了.
 │  │  db.sqlite3
 │  │  manage.py
 │  │  
@@ -112,71 +112,17 @@ self_driving_base_on_object_detection:
 │  │  │      jquery.js
 │  │  │      
 │  │  └─source
-│  │      ├─data_set
-│  │      └─model
+│  │      ├─data_set	存放数据集
+│  │      └─model	存放依据数据集训练的模型
 │  └─templates
 │      │  hello.html
 │      │  
 │      └─self_driving_data_set
 │              index.html
 │              README.md
-             
-
-### 文件说明
-
-bgr_data：存储人工收集数据时采集到的RGB图片
-
-logs：项目前期用的CNN来实现的，但是效果很不理想，CNN部分的代码依然保留。这个文件夹用来存放tensorboard产生的文件的
-
-code_run_on_pi：在树莓派上运行的代码
-	car_control.py：控制小车运动
-	collect_data_pi.py：通过摄像头采集图片并发送给PC
-
-traffic_light_control：在服务器上运行的代码
-	traffic_light_controlor.py：一个简易控制信号灯的代码，和PC通信，将信号灯的状态发送给PC
-
-web：下载数据集网站的代码，只有一个简单的展示、下载数据的页面，用的django写的。不得不睡django真的比javaweb简单太多了。
-
-upload_to_server：一趟运行结束后要上传到服务器上文件的存放路径
-	data_set：数据集存放位置
-		set_mdmbct_20190518144129：数据集/上传者/上传时间
-			images：此趟运行采集到的图片
-			log.txt：在控制台的输出信息
-			pet_label_map.pbtxt：要检测目标的标签
-			set_BetterMeLenovo_20190509194323.csv：此趟检测结果对应的csv文件，可以直接用这个文件和图片生成record文件
-		zip：要上传到服务器的数据集的压缩包
-
-process_img.py：将采集到的图片转成npz文件
-
-train.py：利用npz文件训练模型，我没有做将NPZ文件分批读取到内存的优化，所以如果采集的图片特别多，训练时需要特别大内存的支持。
-
-CNN_driver.py：利用CNN产生的模型控制小车。
-
-CNN_driver_test.py：利用CNN产生的模型，直接读取图片在控制台输出控制的结果。
+```
 
 **注：**CNN的控制小车指令与后面控制小车指令不通用。
-
-collect_data_pc.py：人工控制小车采集数据时，给小车发送控制指令、接受小车发来的图片并存储。
-
-client.py	：和服务器上控制信号灯状态的代码通信。
-
-csv_to_tfRecord.py：字面意思。
-
-detector_driver.py：依据目标检测的结果控制小车运动。
-
-detector_driver_test.py：依据目标检测的结果，读取图片，在控制台输出相应的信息。
-
-environment_gpu.yml：项目所需要的环境及包，不全。
-
-object_detector.py：加载模型，输出目标检测的结果。
-
-server.py：与pi通信，发送控制指令、接受pi发送的图片。
-
-server_conf.conf：服务器的配置，uername、port、ip、password
-
-uploader.py：将文件打包上传到服务器。
-
-util.py：项目用到的一些路径，还有一些杂七杂八的代码，反正是要用到的。
 
 ### 运行项目
 
